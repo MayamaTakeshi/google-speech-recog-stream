@@ -39,7 +39,9 @@ class GoogleSpeechRecogStream extends Writable {
     var request = this.params.request
 
     if(!request) {
-      request = {}
+      request = {
+        single_utterance: true,
+      }
     }
 
     if(!request.config) {
@@ -64,6 +66,8 @@ class GoogleSpeechRecogStream extends Writable {
     if(!request.config.langugeCode) {
       request.config.languageCode = this.params.language
     }
+
+    console.log("gsrs request", request)
 
     this.recognizeStream = speechClient
       .streamingRecognize(request)
@@ -114,6 +118,7 @@ class GoogleSpeechRecogStream extends Writable {
   }
 
   _final(callback) {
+    console.log("gsrs _final")
     if (this.recognizeStream) {
       this.recognizeStream.end();
       this.recognizeStream = null;
