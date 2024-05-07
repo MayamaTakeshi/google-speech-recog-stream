@@ -5,8 +5,10 @@ const GSRS = require('../index.js')
 
 const usage = () => {
   console.log(`
-Arguments: language file_path
-Ex:        en-US hello_world.wav
+Arguments: language wav_file_path
+Ex:        en-US artifacts/how_are_you.16000hz.end_pad10.wav
+
+Obs: the wav file must have silence at the end to trigger google VAD timeout.
 `)
 }
 

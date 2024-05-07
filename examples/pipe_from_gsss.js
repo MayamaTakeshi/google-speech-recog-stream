@@ -21,6 +21,10 @@ const config = {
 	work_dir: './tmp',
 }
 
+if (!fs.existsSync('./tmp')) {
+  fs.mkdirSync('./tmp')
+}
+
 const opts = {
   format,
   config,

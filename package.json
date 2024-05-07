@@ -1,9 +1,10 @@
 {
   "name": "google-speech-recog-stream",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A node.js writable audio stream for google Speech-to-Text",
   "main": "index.js",
   "scripts": {
+    "build": "npx tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -29,7 +30,14 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.10",
     "google-speech-synth-stream": "^1.2.0",
     "wav": "^1.0.2"
-  }
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ]
 }

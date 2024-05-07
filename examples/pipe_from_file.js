@@ -5,8 +5,8 @@ const GSRS = require('../index.js')
 
 const usage = () => {
   console.log(`
-Arguments: language file_path
-Ex:        en-US hello_world.wav
+Arguments: language wav_file_path
+Ex:        en-US artifacts/how_are_you.16000hz.wav
 `)
 }
 
@@ -16,9 +16,9 @@ if(process.argv.length != 4) {
 }
 
 language = process.argv[2]
-file_path = process.argv[3]
+wav_file_path = process.argv[3]
 
-const file = fs.createReadStream(file_path)
+const file = fs.createReadStream(wav_file_path)
 const reader = new wav.Reader()
 
 reader.on('format', function (format) {
