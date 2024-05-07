@@ -69,7 +69,7 @@ const add_evt_listeners = (evtEmitter: any, listeners: Array<[string, EventCallb
 const remove_evt_listeners = (evtEmitter: any) => {
   evtEmitter.my_listeners.forEach((listener: [string, EventCallback]) => {
     const [evt_name, evt_cb] = listener
-    evtEmitter.removeEventListener(evt_name, evt_cb)
+    evtEmitter.removeListener(evt_name, evt_cb)
   })
 
   evtEmitter.my_listeners = []
@@ -78,6 +78,14 @@ const remove_evt_listeners = (evtEmitter: any) => {
 const update = (state: State, action: Action) : State => {
   switch(action) {
   case Action.START_RECOG: {
+    //console.log("START_RECOG")
+    var recognizeStream = state.recognizeStream
+    if(recognizeStream) {
+      remove_evt_listeners(recognizeStream)
+      recognizeStream.end();
+    }
+    recognizeStream = null
+
     var request: any = state.params.request
 
     if(!request) {
@@ -96,7 +104,10 @@ const update = (state: State, action: Action) : State => {
         setTimeout(() => {
           state.eventEmitter.emit('error', 'unsupported_audio_format')
         }, 0)
-        return state
+        return {
+          ...state,
+          recognizeStream,
+        }
       }
       request.config.encoding = audioEncoding
     }
@@ -109,10 +120,11 @@ const update = (state: State, action: Action) : State => {
       request.config.languageCode = state.params.language
     }
 
-    console.log("gsrs request", request)
+    //console.log("gsrs request", request)
 
     const on_error = (error: string) => {
       var err_msg = `recognizeStream error: ${error}`;
+      console.log("on_error", error)
       state.eventEmitter.emit("error", err_msg);
     }
 
@@ -135,14 +147,19 @@ const update = (state: State, action: Action) : State => {
         confidence: confidence,
         full_details: data,
       });
+
+      if (_.some(data.results, (r: any) => r.isFinal)) {
+        state.eventEmitter.emit('isFinalDetected')
+      }
     }
 
     const on_close = () => {
+      console.log("on_close")
       var err_msg = `recognizeStream closed`;
       state.eventEmitter.emit("error", err_msg);
     }
 
-    const recognizeStream = speechClient
+    recognizeStream = speechClient
       .streamingRecognize(request)
 
     add_evt_listeners(recognizeStream,[
@@ -161,7 +178,9 @@ const update = (state: State, action: Action) : State => {
     }
   }
   case Action.SHUTDOWN: {
+    //console.log("SHUTDOWN")
     if (state.recognizeStream) {
+      remove_evt_listeners(state.recognizeStream)
       state.recognizeStream.end();
     }
     return {
@@ -189,6 +208,8 @@ class GoogleSpeechRecogStream extends Writable {
     }
 
     this.state = update(this.state, Action.START_RECOG)
+
+    this.buffer = Buffer.alloc(0)
   }
 
   on(evt: string, cb: EventCallback) {
@@ -198,9 +219,17 @@ class GoogleSpeechRecogStream extends Writable {
   }
 
   _write(data: Buffer, enc: number, callback: EventCallback) {
+    //console.log("_write", data)
     if(this.state.recognizeStream) {
-      var res = this.state.recognizeStream.write(data);
+      if(this.buffer.length > 0) {
+        this.state.recognizeStream.write(this.buffer);
+        this.buffer = Buffer.alloc(0)
+      }
+      this.state.recognizeStream.write(data);
+    } else {
+      this.buffer = Buffer.concat([this.buffer, data])
     }
+
     callback();
     return true;
   }

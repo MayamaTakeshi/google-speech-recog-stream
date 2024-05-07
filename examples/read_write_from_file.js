@@ -1,12 +1,14 @@
 const fs = require('fs')
 const wav = require('wav')
+const Speaker = require('speaker')
+const au = require('@mayama/audio-utils')
 
 const GSRS = require('../index.js')
 
 const usage = () => {
   console.log(`
 Arguments: language wav_file_path
-Ex:        en-US artifacts/how_are_you.16000hz.end_pad10.wav
+Ex:        en-US examples/artifacts/how_are_you.16000hz.end_pad10.wav
 
 Obs: the wav file must have silence at the end to trigger google VAD timeout.
 `)
@@ -32,8 +34,16 @@ reader.on('format', function (format) {
     }
   })
 
+  const speaker = new Speaker(format)
+
+  // We need to write some initial silence to the speaker to avoid scratchyness/gaps
+  const size = 320 * 64
+  console.log("writing initial silence to speaker", size)
+  data = au.gen_silence(1, true, size)
+  speaker.write(data)
+
   sr.on('speech', data => {
-    console.log('speech', data)
+    console.log('speech', JSON.stringify(data, null, 2))
     process.exit(0)
   })
 
@@ -43,6 +53,7 @@ reader.on('format', function (format) {
     //console.log('data', data)
     if(data) {
       sr.write(data)
+      speaker.write(data)
     } else {
       console.log("no more data")
       clearInterval(intId)

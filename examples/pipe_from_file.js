@@ -1,12 +1,15 @@
 const fs = require('fs')
 const wav = require('wav')
+const Speaker = require('speaker')
 
 const GSRS = require('../index.js')
 
 const usage = () => {
   console.log(`
 Arguments: language wav_file_path
-Ex:        en-US artifacts/how_are_you.16000hz.wav
+Ex:        en-US examples/artifacts/how_are_you.16000hz.end_pad10.wav
+
+Obs:  the wav file must contain some silence at the end for the google VAD timeout to be triggered.
 `)
 }
 
@@ -30,11 +33,14 @@ reader.on('format', function (format) {
     }
   })
 
+  const speaker = new Speaker(format)
+
   sr.on('speech', data => {
-    console.log('speech', data)
+    console.log('speech', JSON.stringify(data, null, 2))
   })
 
   reader.pipe(sr)
+  reader.pipe(speaker)
 })
 
 file.pipe(reader)
