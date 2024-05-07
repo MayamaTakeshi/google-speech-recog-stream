@@ -4,7 +4,7 @@ const speechClient = new speech.SpeechClient();
 
 const { Writable } = require("stream");
 
-const { EventEmitter } = require("events");
+const events = require("events");
 
 const _ = require("lodash");
 
@@ -29,6 +29,7 @@ type Format = {
 type Params = {
   language: string,
   request?: Record<string, unknown>,
+  //request?: Record<string, any>,
 }
 
 type Config = Record<string, unknown>
@@ -40,38 +41,44 @@ type Opts = {
   config: Config,
 }
 
-type EvtCb = (evt: any) => void
+type State = {
+  uuid: string,
+  format: Format,
+  params: Params,
+  config: Config,
+  recognizeStream: any | null,
+  eventEmitter: any,
+}
 
-type Cb = () => void
+enum Action {
+  START_RECOG,
+  SHUTDOWN,
+}
 
-class GoogleSpeechRecogStream extends Writable {
-  uuid: string;
-  format: Format;
-  params: Params;
-  config: Config;
+type EventCallback = (...args: any[]) => void
 
-  //constructor(uuid, language, context, config) {
+const add_evt_listeners = (evtEmitter: any, listeners: Array<[string, EventCallback]>) => {
+  evtEmitter.my_listeners = evtEmitter.my_listeners ?? []
 
-  // opts: {uuid, format, params: {language, request}, config)
-  constructor(opts: Opts) {
+  listeners.forEach(([evt_name, evt_cb]) => {
+    evtEmitter.on(evt_name, evt_cb)
+    evtEmitter.my_listeners.push([evt_name, evt_cb]) 
+  })
+}
 
-    super();
+const remove_evt_listeners = (evtEmitter: any) => {
+  evtEmitter.my_listeners.forEach((listener: [string, EventCallback]) => {
+    const [evt_name, evt_cb] = listener
+    evtEmitter.removeEventListener(evt_name, evt_cb)
+  })
 
-    this.uuid = opts.uuid ? opts.uuid : uuid.v4()
+  evtEmitter.my_listeners = []
+}
 
-    this.eventEmitter = new EventEmitter()
-
-    this.format = opts.format
-    this.params = opts.params
-    this.config = opts.config
-
-    this.setup_speechrecog()
-
-    this.start_of_input = false;
-  }
-
-  setup_speechrecog() {
-    var request: any
+const update = (state: State, action: Action) : State => {
+  switch(action) {
+  case Action.START_RECOG: {
+    var request: any = state.params.request
 
     if(!request) {
       request = {
@@ -84,81 +91,123 @@ class GoogleSpeechRecogStream extends Writable {
     }
 
     if(!request.config.encoding) {
-      const audioEncoding = audioFormat2audioEncoding(this.format.audioFormat)
+      const audioEncoding = audioFormat2audioEncoding(state.format.audioFormat)
       if(!audioEncoding) {
         setTimeout(() => {
-          this.eventEmitter.emit('error', 'unsupported_audio_format')
+          state.eventEmitter.emit('error', 'unsupported_audio_format')
         }, 0)
-        return
+        return state
       }
       request.config.encoding = audioEncoding
     }
 
     if(!request.config.sampleRateHertz) {
-      request.config.sampleRateHertz = this.format.sampleRate
+      request.config.sampleRateHertz = state.format.sampleRate
     }
 
     if(!request.config.langugeCode) {
-      request.config.languageCode = this.params.language
+      request.config.languageCode = state.params.language
     }
 
     console.log("gsrs request", request)
 
-    this.recognizeStream = speechClient
-      .streamingRecognize(request)
-      .on("error", (error: string) => {
-        var err_msg = `recognizeStream error: ${error}`;
-        this.eventEmitter.emit("error", err_msg);
-      })
-      .on("data", (data: any) => {
-        var transcript =
-          data.results && data.results[0]
-            ? data.results[0].alternatives[0].transcript
-            : "";
-        var confidence =
-          data.results && data.results[0]
-            ? data.results[0].alternatives[0].confidence
-            : 0;
+    const on_error = (error: string) => {
+      var err_msg = `recognizeStream error: ${error}`;
+      state.eventEmitter.emit("error", err_msg);
+    }
 
-        if (!data.results) return;
+    const on_data = (data: any) => {
+      var transcript =
+        data.results && data.results[0]
+          ? data.results[0].alternatives[0].transcript
+          : "";
+      var confidence =
+        data.results && data.results[0]
+          ? data.results[0].alternatives[0].confidence
+          : 0;
 
-        if (!data.results[0]) return;
+      if (!data.results) return;
 
-        this.eventEmitter.emit('speech', {
-          transcript: transcript,
-          confidence: confidence,
-          full_details: data,
-        });
-      })
-      .on("close", () => {
-        var err_msg = `recognizeStream closed`;
-        this.eventEmitter.emit("error", err_msg);
+      if (!data.results[0]) return;
+
+      state.eventEmitter.emit('speech', {
+        transcript: transcript,
+        confidence: confidence,
+        full_details: data,
       });
+    }
+
+    const on_close = () => {
+      var err_msg = `recognizeStream closed`;
+      state.eventEmitter.emit("error", err_msg);
+    }
+
+    const recognizeStream = speechClient
+      .streamingRecognize(request)
+
+    add_evt_listeners(recognizeStream,[
+      ["error", on_error],
+      ["data", on_data],
+      ["close", on_close]
+    ])
 
     setTimeout(() => {
-      this.eventEmitter.emit("ready");
+      state.eventEmitter.emit("ready");
     }, 0);
+
+    return {
+      ...state,
+      recognizeStream,
+    }
+  }
+  case Action.SHUTDOWN: {
+    if (state.recognizeStream) {
+      state.recognizeStream.end();
+    }
+    return {
+      ...state,
+      recognizeStream: null
+    }
+  }
+  }
+}
+
+class GoogleSpeechRecogStream extends Writable {
+  eventEmitter: any
+  state: State
+
+  constructor(opts: Opts) {
+    super();
+
+    this.state = {
+      uuid: opts.uuid ? opts.uuid : uuid.v4(),
+      format: opts.format,
+      params: opts.params,
+      config: opts.config,
+      eventEmitter: new events.EventEmitter(),
+      recognizeStream: null,
+    }
+
+    this.state = update(this.state, Action.START_RECOG)
   }
 
-  on(evt: string, cb: EvtCb) {
+  on(evt: string, cb: EventCallback) {
     super.on(evt, cb);
 
-    this.eventEmitter.on(evt, cb);
+    this.state.eventEmitter.on(evt, cb);
   }
 
-  _write(data: Buffer, enc: number, callback: Cb) {
-    var res = this.recognizeStream.write(data);
+  _write(data: Buffer, enc: number, callback: EventCallback) {
+    if(this.state.recognizeStream) {
+      var res = this.state.recognizeStream.write(data);
+    }
     callback();
     return true;
   }
 
-  _final(callback: Cb) {
+  _final(callback: EventCallback) {
     console.log("gsrs _final")
-    if (this.recognizeStream) {
-      this.recognizeStream.end();
-      this.recognizeStream = null;
-    }
-
+    this.state = update(this.state, Action.SHUTDOWN)
     callback();
   }
 }
