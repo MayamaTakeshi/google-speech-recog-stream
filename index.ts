@@ -42,6 +42,8 @@ type Opts = {
 
 type EvtCb = (evt: any) => void
 
+type Cb = () => void
+
 class GoogleSpeechRecogStream extends Writable {
   uuid: string;
   format: Format;
@@ -144,13 +146,13 @@ class GoogleSpeechRecogStream extends Writable {
     this.eventEmitter.on(evt, cb);
   }
 
-  _write(data: Buffer, enc: number, callback: any) {
+  _write(data: Buffer, enc: number, callback: Cb) {
     var res = this.recognizeStream.write(data);
     callback();
     return true;
   }
 
-  _final(callback: any) {
+  _final(callback: Cb) {
     console.log("gsrs _final")
     if (this.recognizeStream) {
       this.recognizeStream.end();
