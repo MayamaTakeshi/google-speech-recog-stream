@@ -18,5 +18,5 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/credentials/file
 
 After that, try:
 ```
-node examples/pipe_from_file.js
+node examples/pipe_from_gsss.js
 ```

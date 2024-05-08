@@ -1,21 +1,22 @@
 const fs = require('fs')
 const wav = require('wav')
 const Speaker = require('speaker')
+const au = require('@mayama/audio-utils')
 
 const GSSS = require('google-speech-synth-stream')
 const GSRS = require('../index.js')
 
 const language = 'en-US'
 
+const audioFormat = 1 // LINEAR16
+
+const signed = true
+
 const format = {
-  audioFormat: 1,
-  endianness: 'LE',
+  audioFormat,
   channels: 1,
   sampleRate: 16000,
-  byteRate: 16000,
-  blockAlign: 2,
-  bitDepth: 16,
-  signed: true
+  signed,
 }
 
 const config = {
@@ -41,21 +42,24 @@ const opts = {
 
 const ss = new GSSS(opts)
 
-ss.on('ready', () => {
-  const sr = new GSRS({
-    format,
-    params: {
-      language,
-    }
-  })
-
-  const speaker = new Speaker(format)
-
-  sr.on('speech', data => {
-    console.log('speech', JSON.stringify(data, null, 2))
-  })
-
-  ss.pipe(sr)
-  ss.pipe(speaker)
+const sr = new GSRS({
+  format,
+  params: {
+    language,
+  }
 })
 
+const speaker = new Speaker(format)
+
+// We need to write some initial silence to the speaker to avoid scratchyness/gaps
+const size = 320 * 64
+console.log("writing initial silence to speaker", size)
+data = au.gen_silence(audioFormat, signed, size)
+speaker.write(data)
+
+sr.on('speech', data => {
+  console.log('speech', JSON.stringify(data, null, 2))
+})
+
+ss.pipe(sr)
+ss.pipe(speaker)

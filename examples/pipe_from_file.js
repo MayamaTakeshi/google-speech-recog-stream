@@ -1,6 +1,7 @@
 const fs = require('fs')
 const wav = require('wav')
 const Speaker = require('speaker')
+const au = require('@mayama/audio-utils')
 
 const GSRS = require('../index.js')
 
@@ -34,6 +35,12 @@ reader.on('format', function (format) {
   })
 
   const speaker = new Speaker(format)
+
+  // We need to write some initial silence to the speaker to avoid scratchyness/gaps
+  const size = 320 * 64
+  console.log("writing initial silence to speaker", size)
+  data = au.gen_silence(format.audioFormat, format.signed, size)
+  speaker.write(data)
 
   sr.on('speech', data => {
     console.log('speech', JSON.stringify(data, null, 2))
